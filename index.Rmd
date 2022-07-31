@@ -1,0 +1,373 @@
+---
+title: "Especies en categorías de la Lista Roja de la UICN presentes en Costa Rica"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    theme:
+      version: 3
+      bootswatch: cosmo
+runtime: shiny  
+---
+
+```{r paquetes}
+# Paquetes de R
+
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(ggthemes)
+library(plotly)
+library(DT)
+library(flexdashboard)
+```
+
+```{r constantes}
+URL_BASE_BIODATACR_BIE <- "http://data.biodiversidad.go.cr/ala-bie/species/"
+```
+
+```{r funciones}
+# Función para asignación de grupo a una especie
+grupo = function(kingdom, phylum, class) {
+  ifelse(is.na(kingdom),
+         "Otros",
+         ifelse(
+           kingdom == "Plantae",
+           "Plantas",
+           ifelse(
+             is.na(phylum),
+             "Otros",
+             ifelse(
+               phylum %in% c(
+                 "Acanthocephala",
+                 "Annelida",
+                 "Arthropoda",
+                 "Bryozoa",
+                 "Cnidaria",
+                 "Echinodermata",
+                 "Kinorhyncha",
+                 "Mollusca",
+                 "Nematoda",
+                 "Nematomorpha",
+                 "Onychophora",
+                 "Phoronida",
+                 "Porifera",
+                 "Platyhelminthes",
+                 "Sipuncula"
+               ) |
+                 class %in% c("Appendicularia", "Ascidiacea", "Leptocardii", "Thaliacea"),
+               "Invertebrados",
+               ifelse(
+                 is.na(class),
+                 "Otros",
+                 ifelse(
+                   class == "Amphibia",
+                   "Anfibios",
+                   ifelse(
+                     class == "Reptilia",
+                     "Reptiles",
+                     ifelse(
+                       class == "Mammalia",
+                       "Mamíferos",
+                       ifelse(class == "Aves",
+                              "Aves",
+                              ifelse(
+                                class %in% c("Actinopterygii", "Elasmobranchii", "Holocephali", "Myxini"),
+                                "Peces",
+                                "Otros"
+                              ))
+                     )
+                   )
+                 )
+               )
+             )
+           )
+         ))
+}
+```
+
+```{r entrada-datos-lista-especies}
+# Lectura
+lista <- read_delim(file = "especies-categorias-lista-roja-uicn.csv")
+
+# Filtros
+lista <-
+  lista %>%
+  filter(taxonomicStatus == "ACCEPTED") %>%
+  filter(taxonRank == "SPECIES")
+
+# Columnas para URL
+lista <-
+  lista %>%
+  mutate(species = paste0(
+    "<a href='",
+    URL_BASE_BIODATACR_BIE,
+    taxonKey,
+    "'>",
+    species,
+    "</a>"
+  )) %>%
+  mutate(url = "<a href='http://biodiversidad.go.cr/'>biodatacr</a>")
+
+# Grupo de especies
+lista <-
+  lista %>%
+  mutate(grupo = grupo(kingdom, phylum, class))
+```
+
+Column {.sidebar}
+-----------------------------------------------------------------------
+
+```{r filtros}
+# Filtros de datos
+
+# Encabezado de la columna
+h3("Filtros de datos")
+
+checkboxGroupInput(
+  "categorias_lista_roja",
+  label = h4("Categorías de la Lista Roja"),
+  choices = list(
+    "Extinta (EX)" = "EX",
+    "Extinta en estado silvestre (EW)" = "EW",
+    "En peligro crítico (CR)" = "CR",
+    "En peligro (EN)" = "EN",
+    "Vulnerable (VU)" = "VU",
+    "Casi amenazada (NT)" = "NT",
+    "Preocupación menor (LC)" = "LC",
+    "Datos insuficientes (DD)" = "DD",
+    "No evaluada (NE)" = "NE"
+  ),
+  selected = c("CR", "EN", "VU")
+)
+
+checkboxGroupInput(
+  "grupos",
+  label = h4("Grupos taxonómicos"),
+  choices = list(
+    "Plantas" = "Plantas",
+    "Peces" = "Peces",    
+    "Aves" = "Aves",
+    "Anfibios" = "Anfibios",
+    "Reptiles" = "Reptiles",
+    "Mamíferos" = "Mamíferos",
+    "Invertebrados" = "Invertebrados",
+    "Otros" = "Otros"
+  ),
+  selected = c("Plantas", "Anfibios", "Reptiles", "Mamíferos", "Aves", "Peces", "Invertebrados", "Otros")
+)
+
+
+# Función para filtrar los datos con base en los controles de entrada
+filtrarLista <- reactive({
+  # Valor inicial del objeto que va a retornarse
+  lista_filtrada <- lista
+  
+    lista_filtrada <-
+      lista_filtrada %>%
+      filter(iucnRedListCategory %in% input$categorias_lista_roja) %>%
+      filter(grupo %in% input$grupos)
+
+  return(lista_filtrada)  
+})
+```
+
+Row {data-height=150}
+-----------------------------------------------------------------------
+
+### Especies de plantas {data-width=200}
+
+```{r especies-plantas}
+# Especies de plantas
+
+renderValueBox({
+    lista <- filtrarLista()  
+  
+    valueBox(
+      value = nrow(lista[lista$grupo == "Plantas",]),
+      caption = "Especies de plantas",
+      icon = "fas fa-tree"
+    )
+  })
+```
+
+### Especies de peces {data-width=200}
+
+```{r especies-peces}
+# Especies de peces
+
+renderValueBox({
+    lista <- filtrarLista()  
+  
+    valueBox(
+      value = nrow(lista[lista$grupo == "Peces",]),
+      caption = "Especies de peces",
+      icon = "fas fa-fish"
+    )
+  })
+```
+
+### Especies de aves {data-width=200}
+
+```{r especies-aves}
+# Especies de aves
+
+renderValueBox({
+    lista <- filtrarLista()  
+  
+    valueBox(
+      value = nrow(lista[lista$grupo == "Aves",]),
+      caption = "Especies de aves",
+      icon = "fas fa-dove"
+    )
+  })
+```
+
+### Especies de anfibios {data-width=200}
+
+```{r especies-anfibios}
+# Especies de anfibios
+
+renderValueBox({
+    lista <- filtrarLista()  
+  
+    valueBox(
+      value = nrow(lista[lista$grupo == "Anfibios",]),
+      caption = "Especies de anfibios",
+      icon = "fas fa-frog"
+    )
+  })
+```
+
+### Especies de reptiles {data-width=200}
+
+```{r especies-reptiles}
+# Especies de reptiles
+
+renderValueBox({
+    lista <- filtrarLista()  
+  
+    valueBox(
+      value = nrow(lista[lista$grupo == "Reptiles",]),
+      caption = "Especies de reptiles"
+    )
+  })
+```
+
+### Especies de mamíferos {data-width=200}
+
+```{r especies-mamiferos}
+# Especies de mamíferos
+
+renderValueBox({
+    lista <- filtrarLista()  
+  
+    valueBox(
+      value = nrow(lista[lista$grupo == "Mamíferos",]),
+      caption = "Especies de mamíferos",
+      icon = "fas fa-otter"
+    )
+  })
+```
+
+### Especies de invertebrados {data-width=200}
+
+```{r especies-invertebrados}
+# Especies de invertebrados
+
+renderValueBox({
+    lista <- filtrarLista()  
+  
+    valueBox(
+      value = nrow(lista[lista$grupo == "Invertebrados",]),
+      caption = "Especies de invertebrados",
+      icon = "fas fa-bug"
+    )
+  })
+```
+
+### Especies de otros grupos {data-width=200}
+
+```{r especies-otros}
+# Especies de otros grupos
+
+renderValueBox({
+    lista <- filtrarLista()  
+  
+    valueBox(
+      value = nrow(lista[lista$grupo == "Otros",]),
+      caption = "Especies de otros grupos"
+    )
+  })
+```
+
+Row {data-height=420}
+-----------------------------------------------------------------------
+
+### Lista de especies
+
+```{r tabla}
+# Tabla de especies
+
+renderDT({
+  lista <- filtrarLista()
+  
+  lista %>%
+    select(iucnRedListCategory,
+           grupo,
+           species,
+           genus,
+           family,
+           order,
+           class,
+           phylum,
+           kingdom) %>%
+    arrange(iucnRedListCategory, grupo, species) %>%
+    datatable(
+      escape = FALSE,
+      colnames = c(
+        "Categoría de la Lista Roja",
+        "Grupo",
+        "Especie",
+        "Género",
+        "Familia",
+        "Orden",
+        "Filo/División",
+        "Clase",
+        "Reino"
+      ),
+      options = list(
+        pageLength = 5,
+        language = list(url = '//cdn.datatables.net/plug-ins/1.10.11/i18n/Spanish.json')
+      )
+    )
+})
+```
+
+Row {data-height=430}
+-----------------------------------------------------------------------
+
+### Gráfico de cantidades de especies en categorías de la Lista Roja {data-width=300}
+
+```{r grafico-especies-categoria}
+# Gráfico de barras de cantidades de especies en categorías de la Lista Roja
+
+renderPlotly({
+  lista <- filtrarLista()
+  
+  # Gráfico ggplot2
+  grafico_especies_x_categoria <-
+    lista %>%
+    count(iucnRedListCategory) %>%
+    ggplot(aes(x = reorder(iucnRedListCategory, -n), y = n)) +
+    geom_bar(stat = "identity", fill = "blue") +
+    ggtitle("Cantidades de especies en categorías de la Lista Roja") +
+    xlab("Categorías de la Lista Roja") +
+    ylab("Cantidad de especies") +
+    theme_hc() # tema del paquete ggthemes
+  
+  # Gráfico plotly
+  grafico_especies_x_categoria %>%
+    ggplotly() %>%
+    config(locale = 'es') # traducción de etiquetas al español
+})
+```
